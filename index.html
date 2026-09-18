@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827"><link rel="manifest" href="manifest.json">
+<title>My Coin</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b1020;color:#eef2ff;font-family:Arial,sans-serif}
+main{max-width:1000px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+h1{margin:0}.status{padding:9px 12px;background:#151d32;border-radius:9px;color:#b9c3dd}.info{margin:14px 0;color:#aeb8d4}
+.card{background:#12192b;border:1px solid #28314a;border-radius:12px;padding:10px;overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:11px;border-bottom:1px solid #28314a;text-align:left}th{color:#9eabc9}
+.pos{color:#45d391}.small{font-size:13px;color:#8792b1}.empty{padding:25px;text-align:center;color:#9eabc9}
+</style></head>
+<body><main>
+<div class="top"><h1>My Coin 📊</h1><span id="status" class="status">Starting...</span></div>
+<div class="info">7D &gt; +10% • 24H &gt; +5% • 1H RSI 20–40 • Binance USDT Spot</div>
+<div class="card"><table><thead><tr><th>Coin</th><th>Price</th><th>1H %</th><th>24H %</th><th>7D %</th><th>1H RSI</th><th>24H Volume</th></tr></thead>
+<tbody id="rows"><tr><td colspan="7" class="empty">Loading market...</td></tr></tbody></table></div>
+<p class="small">Auto scan: every 5 minutes. Keep this app open for continuous updates.</p>
+</main>
+<script>
+const API='https://api.binance.com'; let timer;
+async function get(path){const r=await fetch(API+path);if(!r.ok)throw Error('Binance API '+r.status);return r.json()}
+function calcRSI(c,n=14){if(c.length<n+1)return null;let g=0,l=0;for(let i=1;i<=n;i++){let d=c[i]-c[i-1];if(d>0)g+=d;else l-=d}let ag=g/n,al=l/n;for(let i=n+1;i<c.length;i++){let d=c[i]-c[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n}return al===0?100:100-100/(1+ag/al)}
+function money(x){return x>=1?x.toLocaleString(undefined,{maximumFractionDigits:4}):x.toPrecision(5)}
+async function scan(){
+ const st=document.getElementById('status'), rows=document.getElementById('rows');st.textContent='Scanning...';
+ try{
+  const [info,ticks]=await Promise.all([get('/api/v3/exchangeInfo'),get('/api/v3/ticker/24hr')]);
+  const tm=new Map(ticks.map(x=>[x.symbol,x]));
+  const syms=info.symbols.filter(s=>s.status==='TRADING'&&s.isSpotTradingAllowed&&s.quoteAsset==='USDT')
+    .map(s=>s.symbol).filter(x=>tm.has(x)&&+tm.get(x).priceChangePercent>5);
+  let out=[];
+  for(let i=0;i<syms.length;i+=5){
+   const batch=syms.slice(i,i+5);
+   const got=await Promise.all(batch.map(async sym=>{
+    try{
+     const k=await get('/api/v3/klines?symbol='+sym+'&interval=1h&limit=170');
+     const c=k.map(a=>+a[4]); const r=calcRSI(c); if(r==null)return null;
+     const p=c.at(-1), one=(p/c.at(-2)-1)*100, seven=(p/c[0]-1)*100, d=+tm.get(sym).priceChangePercent;
+     return seven>10&&d>5&&r>=20&&r<=40?{sym,p,one,d,seven,r,vol:+tm.get(sym).quoteVolume}:null;
+    }catch(e){return null}
+   })); out.push(...got.filter(Boolean)); st.textContent=`Scanning ${Math.min(i+5,syms.length)}/${syms.length}...`;
+   await new Promise(r=>setTimeout(r,100));
+  }
+  out.sort((a,b)=>b.seven-a.seven);
+  rows.innerHTML=out.length?out.map(x=>`<tr><td><b>${x.sym.replace('USDT','')}</b><div class="small">${x.sym}</div></td><td>$${money(x.p)}</td><td class="pos">${x.one.toFixed(2)}%</td><td class="pos">${x.d.toFixed(2)}%</td><td class="pos">${x.seven.toFixed(2)}%</td><td>${x.r.toFixed(2)}</td><td>$${x.vol.toLocaleString(undefined,{maximumFractionDigits:0})}</td></tr>`).join(''):'<tr><td colspan="7" class="empty">No matching coins right now.</td></tr>';
+  st.textContent=`Updated ${new Date().toLocaleTimeString()} • ${out.length} coins`;
+ }catch(e){st.textContent='Data unavailable';rows.innerHTML='<tr><td colspan="7" class="empty">Could not connect to Binance. Check internet and try again.</td></tr>'}
+}
+scan(); timer=setInterval(scan,300000);
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script></body></html>
