@@ -1,54 +1,573 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#111827"><link rel="manifest" href="manifest.json">
-<title>My Coin</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MY COIN</title>
+
 <style>
-*{box-sizing:border-box}body{margin:0;background:#0b1020;color:#eef2ff;font-family:Arial,sans-serif}
-main{max-width:1000px;margin:auto;padding:18px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
-h1{margin:0}.status{padding:9px 12px;background:#151d32;border-radius:9px;color:#b9c3dd}.info{margin:14px 0;color:#aeb8d4}
-.card{background:#12192b;border:1px solid #28314a;border-radius:12px;padding:10px;overflow:auto}
-table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:11px;border-bottom:1px solid #28314a;text-align:left}th{color:#9eabc9}
-.pos{color:#45d391}.small{font-size:13px;color:#8792b1}.empty{padding:25px;text-align:center;color:#9eabc9}
-</style></head>
-<body><main>
-<div class="top"><h1>My Coin 📊</h1><span id="status" class="status">Starting...</span></div>
-<div class="info">7D &gt; +10% • 24H &gt; +5% • 1H RSI 20–55• Binance USDT Spot</div>
-<div class="card"><table><thead><tr><th>Coin</th><th>Price</th><th>1H %</th><th>24H %</th><th>7D %</th><th>1H RSI</th><th>24H Volume</th></tr></thead>
-<tbody id="rows"><tr><td colspan="7" class="empty">Loading market...</td></tr></tbody></table></div>
-<p class="small">Auto scan: every 5 minutes. Keep this app open for continuous updates.</p>
-</main>
-<script>
-const API='https://api.binance.com'; let timer;
-async function get(path){const r=await fetch(API+path);if(!r.ok)throw Error('Binance API '+r.status);return r.json()}
-function calcRSI(c,n=14){if(c.length<n+1)return null;let g=0,l=0;for(let i=1;i<=n;i++){let d=c[i]-c[i-1];if(d>0)g+=d;else l-=d}let ag=g/n,al=l/n;for(let i=n+1;i<c.length;i++){let d=c[i]-c[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n}return al===0?100:100-100/(1+ag/al)}
-function money(x){return x>=1?x.toLocaleString(undefined,{maximumFractionDigits:4}):x.toPrecision(5)}
-async function scan(){
- const st=document.getElementById('status'), rows=document.getElementById('rows');st.textContent='Scanning...';
- try{
-  const [info,ticks]=await Promise.all([get('/api/v3/exchangeInfo'),get('/api/v3/ticker/24hr')]);
-  const tm=new Map(ticks.map(x=>[x.symbol,x]));
-  const syms=info.symbols.filter(s=>s.status==='TRADING'&&s.isSpotTradingAllowed&&s.quoteAsset==='USDT')
-    .map(s=>s.symbol).filter(x=>tm.has(x)&&+tm.get(x).priceChangePercent>5);
-  let out=[];
-  for(let i=0;i<syms.length;i+=5){
-   const batch=syms.slice(i,i+5);
-   const got=await Promise.all(batch.map(async sym=>{
-    try{
-     const k=await get('/api/v3/klines?symbol='+sym+'&interval=1h&limit=170');
-     const c=k.map(a=>+a[4]); const r=calcRSI(c); if(r==null)return null;
-     const p=c.at(-1), one=(p/c.at(-2)-1)*100, seven=(p/c[0]-1)*100, d=+tm.get(sym).priceChangePercent;
-     return seven>10&&d>5&&r>=20&&r<=40?{sym,p,one,d,seven,r,vol:+tm.get(sym).quoteVolume}:null;
-    }catch(e){return null}
-   })); out.push(...got.filter(Boolean)); st.textContent=`Scanning ${Math.min(i+5,syms.length)}/${syms.length}...`;
-   await new Promise(r=>setTimeout(r,100));
-  }
-  out.sort((a,b)=>b.seven-a.seven);
-  rows.innerHTML=out.length?out.map(x=>`<tr><td><b>${x.sym.replace('USDT','')}</b><div class="small">${x.sym}</div></td><td>$${money(x.p)}</td><td class="pos">${x.one.toFixed(2)}%</td><td class="pos">${x.d.toFixed(2)}%</td><td class="pos">${x.seven.toFixed(2)}%</td><td>${x.r.toFixed(2)}</td><td>$${x.vol.toLocaleString(undefined,{maximumFractionDigits:0})}</td></tr>`).join(''):'<tr><td colspan="7" class="empty">No matching coins right now.</td></tr>';
-  st.textContent=`Updated ${new Date().toLocaleTimeString()} • ${out.length} coins`;
- }catch(e){st.textContent='Data unavailable';rows.innerHTML='<tr><td colspan="7" class="empty">Could not connect to Binance. Check internet and try again.</td></tr>'}
+body{
+  margin:0;
+  background:#0b1220;
+  color:#fff;
+  font-family:Arial,sans-serif;
 }
-scan(); timer=setInterval(scan,300000);
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
-</script></body></html>
+
+.container{
+  max-width:1200px;
+  margin:auto;
+  padding:18px;
+}
+
+h1{
+  margin:0 0 5px;
+}
+
+.subtitle{
+  color:#9aa8ba;
+  margin-bottom:20px;
+}
+
+.section{
+  background:#101a2b;
+  border:1px solid #29394f;
+  border-radius:12px;
+  margin-bottom:18px;
+  overflow:hidden;
+}
+
+.section h2{
+  margin:0;
+  padding:15px;
+}
+
+.description{
+  color:#9aa8ba;
+  font-size:13px;
+  padding:0 15px 12px;
+}
+
+.table-wrap{
+  overflow-x:auto;
+}
+
+table{
+  width:100%;
+  min-width:850px;
+  border-collapse:collapse;
+}
+
+th,td{
+  padding:11px;
+  border-top:1px solid #26354a;
+  text-align:right;
+  white-space:nowrap;
+}
+
+th:first-child,
+td:first-child{
+  text-align:left;
+}
+
+th{
+  color:#9aa8ba;
+  font-size:12px;
+}
+
+.coin{
+  font-weight:bold;
+}
+
+.green{
+  color:#35df89;
+}
+
+.red{
+  color:#ff6878;
+}
+
+.empty{
+  padding:18px;
+  color:#9aa8ba;
+}
+
+.status{
+  margin-bottom:18px;
+  padding:10px;
+  background:#111c2e;
+  border-radius:8px;
+  color:#b9c5d5;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>MY COIN</h1>
+<div class="subtitle">Binance USDT Spot Scanner</div>
+
+<div class="status" id="status">
+Loading market data...
+</div>
+
+
+<!-- 1. SEVEN DAYS -->
+
+<div class="section">
+
+<h2>🟢 7 Days</h2>
+
+<div class="description">
+Coins with 7 Day percentage above +10%
+</div>
+
+<div id="sevenDays"></div>
+
+</div>
+
+
+<!-- 2. 24 HOURS -->
+
+<div class="section">
+
+<h2>🔵 24 Hours</h2>
+
+<div class="description">
+Coins with 24 Hour percentage above +5%
+</div>
+
+<div id="twentyFourHours"></div>
+
+</div>
+
+
+<!-- 3. 1 HOUR RSI -->
+
+<div class="section">
+
+<h2>🟡 1 Hour RSI</h2>
+
+<div class="description">
+Coins with 1 Hour RSI between 25 and 55
+</div>
+
+<div id="rsiCoins"></div>
+
+</div>
+
+
+<!-- 4. ALL CONDITIONS -->
+
+<div class="section">
+
+<h2>⭐ All Conditions Match</h2>
+
+<div class="description">
+Coins matching 7D +10%, 24H +5% and RSI 25–55
+</div>
+
+<div id="allConditions"></div>
+
+</div>
+
+</div>
+
+
+<script>
+
+const API = "https://api.binance.com/api/v3";
+
+
+// -------------------------
+// RSI CALCULATION
+// -------------------------
+
+function calculateRSI(closes, period = 14){
+
+    if(closes.length <= period){
+        return NaN;
+    }
+
+    let gains = 0;
+    let losses = 0;
+
+    for(let i = 1; i <= period; i++){
+
+        const change = closes[i] - closes[i-1];
+
+        if(change > 0){
+            gains += change;
+        }else{
+            losses -= change;
+        }
+
+    }
+
+    let averageGain = gains / period;
+    let averageLoss = losses / period;
+
+    for(let i = period + 1; i < closes.length; i++){
+
+        const change = closes[i] - closes[i-1];
+
+        const gain = Math.max(change,0);
+        const loss = Math.max(-change,0);
+
+        averageGain =
+            ((averageGain * (period - 1)) + gain) / period;
+
+        averageLoss =
+            ((averageLoss * (period - 1)) + loss) / period;
+
+    }
+
+    if(averageLoss === 0){
+        return 100;
+    }
+
+    const rs = averageGain / averageLoss;
+
+    return 100 - (100 / (1 + rs));
+}
+
+
+// -------------------------
+// NUMBER FORMAT
+// -------------------------
+
+function formatPrice(value){
+
+    if(value >= 1){
+        return value.toFixed(2);
+    }
+
+    return value.toFixed(6);
+}
+
+
+function formatPercent(value){
+
+    const color = value >= 0 ? "green" : "red";
+
+    const sign = value >= 0 ? "+" : "";
+
+    return `<span class="${color}">
+    ${sign}${value.toFixed(2)}%
+    </span>`;
+}
+
+
+// -------------------------
+// TABLE
+// -------------------------
+
+function makeTable(coins){
+
+    if(coins.length === 0){
+
+        return `
+        <div class="empty">
+        No matching coins right now.
+        </div>
+        `;
+
+    }
+
+    let html = `
+
+    <div class="table-wrap">
+
+    <table>
+
+    <thead>
+
+    <tr>
+
+    <th>Coin</th>
+    <th>Price</th>
+    <th>1 Hour %</th>
+    <th>24 Hour %</th>
+    <th>7 Day %</th>
+    <th>RSI</th>
+    <th>24 Hours Volume</th>
+
+    </tr>
+
+    </thead>
+
+    <tbody>
+    `;
+
+
+    coins.forEach(coin => {
+
+        html += `
+
+        <tr>
+
+        <td class="coin">
+        ${coin.sym}
+        </td>
+
+        <td>
+        ${formatPrice(coin.price)}
+        </td>
+
+        <td>
+        ${formatPercent(coin.oneHour)}
+        </td>
+
+        <td>
+        ${formatPercent(coin.day)}
+        </td>
+
+        <td>
+        ${formatPercent(coin.sevenDay)}
+        </td>
+
+        <td>
+        ${coin.rsi.toFixed(2)}
+        </td>
+
+        <td>
+        ${Number(coin.volume).toLocaleString()}
+        </td>
+
+        </tr>
+
+        `;
+
+    });
+
+
+    html += `
+    </tbody>
+    </table>
+    </div>
+    `;
+
+    return html;
+}
+
+
+// -------------------------
+// GET DATA
+// -------------------------
+
+async function getJSON(url){
+
+    const response = await fetch(url);
+
+    if(!response.ok){
+        throw new Error("API Error");
+    }
+
+    return response.json();
+}
+
+
+// -------------------------
+// MAIN SCANNER
+// -------------------------
+
+async function scan(){
+
+    document.getElementById("status").innerText =
+    "Scanning Binance coins...";
+
+
+    try{
+
+        const ticker =
+        await getJSON(API + "/ticker/24hr");
+
+
+        // USDT coins only
+        const usdtCoins =
+        ticker.filter(x =>
+            x.symbol.endsWith("USDT")
+        );
+
+
+        // Highest volume first
+        usdtCoins.sort(
+            (a,b) =>
+            Number(b.quoteVolume) -
+            Number(a.quoteVolume)
+        );
+
+
+        // Scan top 100 volume coins
+        const selected =
+        usdtCoins.slice(0,100);
+
+
+        const results = [];
+
+
+        for(const tickerCoin of selected){
+
+            try{
+
+                const symbol =
+                tickerCoin.symbol;
+
+
+                // 1 Hour candles
+                const hourly =
+                await getJSON(
+                `${API}/klines?symbol=${symbol}&interval=1h&limit=30`
+                );
+
+
+                // Daily candles
+                const daily =
+                await getJSON(
+                `${API}/klines?symbol=${symbol}&interval=1d&limit=8`
+                );
+
+
+                const hourlyCloses =
+                hourly.map(x => Number(x[4]));
+
+
+                const dailyCloses =
+                daily.map(x => Number(x[4]));
+
+
+                // 1 hour percentage
+                const oneHour =
+                (
+                    (hourlyCloses.at(-1) /
+                    hourlyCloses.at(-2))
+                    - 1
+                ) * 100;
+
+
+                // 7 day percentage
+                const sevenDay =
+                (
+                    (dailyCloses.at(-1) /
+                    dailyCloses[0])
+                    - 1
+                ) * 100;
+
+
+                // RSI
+                const rsi =
+                calculateRSI(hourlyCloses);
+
+
+                results.push({
+
+                    sym:
+                    symbol.replace("USDT","/USDT"),
+
+                    price:
+                    Number(tickerCoin.lastPrice),
+
+                    oneHour:
+                    oneHour,
+
+                    day:
+                    Number(tickerCoin.priceChangePercent),
+
+                    sevenDay:
+                    sevenDay,
+
+                    rsi:
+                    rsi,
+
+                    volume:
+                    Number(tickerCoin.quoteVolume)
+
+                });
+
+            }catch(error){
+
+                // Skip coins with unavailable data
+
+            }
+
+        }
+
+
+        // -------------------------
+        // FOUR SEPARATE PORTIONS
+        // -------------------------
+
+
+        // 1. 7 DAYS ONLY
+        const sevenDays =
+        results.filter(coin =>
+            coin.sevenDay > 10
+        );
+
+
+        // 2. 24 HOURS ONLY
+        const twentyFourHours =
+        results.filter(coin =>
+            coin.day > 5
+        );
+
+
+        // 3. RSI ONLY
+        const rsiCoins =
+        results.filter(coin =>
+            coin.rsi >= 25 &&
+            coin.rsi <= 55
+        );
+
+
+        // 4. ALL THREE TOGETHER
+        const allConditions =
+        results.filter(coin =>
+            coin.sevenDay > 10 &&
+            coin.day > 5 &&
+            coin.rsi >= 25 &&
+            coin.rsi <= 55
+        );
+
+
+        // -------------------------
+        // SHOW THE FOUR PORTIONS
+        // -------------------------
+
+        document.getElementById("sevenDays").innerHTML =
+        makeTable(sevenDays);
+
+
+        document.getElementById("twentyFourHours").innerHTML =
+        makeTable(twentyFourHours);
+
+
+        document.getElementById("rsiCoins").innerHTML =
+        makeTable(rsiCoins);
+
+
+        document.getElementById("allConditions").innerHTML =
+        makeTable(allConditions);
+
+
+        document.getElementById("status").innerText =
+        `Updated: ${new Date().toLocaleTimeString()} | ${results.length} coins scanned`;
+
+    }catch(error){
+
+        document.getElementById("status").innerText =
+        "Could not load Binance data. Please refresh the page.";
+
+    }
+
+}
+
+
+// START
+scan();
+
+</script>
+
+</body>
+</html>
